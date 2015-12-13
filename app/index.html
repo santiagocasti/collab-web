@@ -1,23 +1,35 @@
 <!DOCTYPE html>
-<html>
+<html ng-app="collabApp">
 <head>
     <title>Collab</title>
     <link rel="stylesheet" media="all" href="css/bootstrap.css">
     <link rel="stylesheet" media="all" href="css/main.css">
-
     <link href="https://www.gstatic.com/realtime/quickstart-styles.css" rel="stylesheet" type="text/css"/>
-    <script src="//apis.google.com/js/api.js?onload=init"></script>
-    <script src="../bower_components/angular/angular.js"></script>
-    <script src="../bower_components/angular-route/angular-route.js"></script>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular-route.min.js"></script>
     <script src="http://code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script src="js/require.js?onload=requires"></script>
 
     <script src="js/app.js"></script>
     <script src="js/services.js"></script>
+    <script src="js/replication/replicaIdentity.js"></script>
+    <script src="js/crdts/registerValue.js"></script>
+    <script src="js/crdts/vectorClock.js"></script>
+    <script src="js/crdts/multiValueRegister.js"></script>
+    <script src="js/crdts/factory.js"></script>
+    <script src="js/util/random.js"></script>
+    <script src="js/util/hashing.js"></script>
+    <script src="js/util/loggingUtils.js"></script>
     <script src="js/controllers.js"></script>
+
+
+    <script type="application/javascript" src="https://www.gstatic.com/realtime/realtime-client-utils.js"></script>
+    <script type="application/javascript" src="https://apis.google.com/js/api.js?onload=initGAPI"></script>
 
 </head>
 
-<body ng-app="collabApp">
+<body>
 <div data-ng-controller="interactionController">
 
     <section id="main">
@@ -27,73 +39,44 @@
         <div class="content">
 
 
-            <!--<div id="navbar">-->
-            <!--&lt;!&ndash; Purely for debugging purposes &ndash;&gt;-->
-            <!--<ul>-->
-            <!--<li>-->
-            <!--<button class="btn" data-ng-click="printPeersList()">Print Peer List</button>-->
-            <!--</li>-->
-            <!--<li>-->
-            <!--<button id="authorizeButton" disabled>You must authorize</button>-->
-            <!--</li>-->
-            <!--<li>-->
-            <!--<button id="createFile" disabled>new</button>-->
-            <!--</li>-->
-            <!--</ul>-->
-            <!--</div>-->
+            <div id="navbar">
+                <!-- Purely for debugging purposes -->
+                <ul>
+                    <li>
+                        <button id="auth_button">Authorize</button>
+                    </li>
+                </ul>
+            </div>
 
-            <!--<div class="tableContainer">-->
-            <!--<table class="tg" style="width: 100%">-->
-            <!--<thead>-->
-            <!--<tr>-->
-            <!--<th class="tg-afp9" style="width: 7%;"></th>-->
-            <!--<th class="tg-afp9" style="">A</th>-->
-            <!--<th class="tg-afp9" style="">B</th>-->
-            <!--<th class="tg-afp9" style="">C</th>-->
-            <!--<th class="tg-afp9" style="">D</th>-->
-            <!--<th class="tg-afp9" style="">E</th>-->
-            <!--<th class="tg-afp9" style="">F</th>-->
-            <!--<th class="tg-afp9" style="">G</th>-->
-            <!--<th class="tg-afp9" style="">H</th>-->
-            <!--</tr>-->
-            <!--</thead>-->
-            <!--<tbody>-->
-            <!--<tr data-ng-repeat="row in rows">-->
-            <!--<td contenteditable data-ng-click="cellClicked(cell.row, cell.col)" class="{{getCellClass(cell.row, cell.col)}}"-->
-            <!--data-ng-repeat="cell in row"-->
-            <!--id="cell{{cell.row}}-{{cell.col}}">-->
-            <!--{{cell.value}}-->
-            <!--</td>-->
-            <!--</tr>-->
-            <!--</tbody>-->
-            <!--</table>-->
-            <!--</div>-->
-            <!--<div id="container">-->
-            <!--<textarea id="editor1" rows="15" cols="50" disabled="true"></textarea>-->
-            <!--</div>-->
+            <div class="tableContainer">
+                <table class="tg" style="width: 100%">
+                    <thead>
+                    <tr>
+                        <th class="tg-afp9" style="width: 7%;"></th>
+                        <th class="tg-afp9" style="">A</th>
+                        <th class="tg-afp9" style="">B</th>
+                        <th class="tg-afp9" style="">C</th>
+                        <th class="tg-afp9" style="">D</th>
+                        <th class="tg-afp9" style="">E</th>
+                        <th class="tg-afp9" style="">F</th>
+                        <th class="tg-afp9" style="">G</th>
+                        <th class="tg-afp9" style="">H</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr data-ng-repeat="row in rows">
+                        <td contenteditable data-ng-click="cellClicked(cell.row, cell.col)"
+                            class="{{getCellClass(cell.row, cell.col)}}"
+                            data-ng-repeat="cell in row"
+                            id="cell{{cell.row}}-{{cell.col}}">
+                            {{cell.value}}
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
             <div class="push"></div>
 
-
-        </div>
-
-        <div>
-            <main>
-                <h1>Realtime Collaboration Quickstart</h1>
-
-                <p>Welcome to the quickstart in-memory app!</p>
-                <textarea id="text_area_1"></textarea>
-                <textarea id="text_area_2"></textarea>
-
-
-                <button class="btn" data-ng-click="setupGoogleAPI()">Setup GAPI</button>
-
-                <p>This document only exists in memory, so it doesn't have real-time collaboration enabled. However, you
-                    can persist it to your own disk using the model.toJson() function and load it using the
-                    model.loadFromJson() function. This enables your users without Google accounts to use your
-                    application.</p>
-                <textarea id="json_textarea"></textarea>
-                <button id="json_button" class="visible">GetJson</button>
-            </main>
 
         </div>
 

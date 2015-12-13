@@ -1,19 +1,131 @@
-var app = angular.module('collabApp', []);
-
-var init = function () {
-    gapiService.initGapi(postInitiation);
+function initGAPI() {
+    angular.element(document).ready(function () {
+        console.log("initGAPI function after loading api.js");
+        window.init();
+    });
 }
 
-app.controller('interactionController', function ($scope) {
+app.controller('interactionController', ['$scope', "$window", function ($scope, $window) {
 
     $scope.rows = [];
+    $scope.crdtMap = {};
+    $scope.realtimeUtils = undefined;
     $scope.messageContent = 'content';
     $scope.onlineUserCount = 0;
     $scope.onlineUserCountString = "";
 
-    var postInitiation = function () {
-        // load all your assets
-    }
+    $window.init = function () {
+        $scope.$apply($scope.loadDriveAPI());
+    };
+
+    $scope.getReplicaIdentityString = function () {
+        return getRandomInt(1, 1000000) + '.' + (new Date().getTime());
+    };
+
+    $scope.replicaIdentifier = $scope.getReplicaIdentityString();
+
+    $scope.handleAuth = function () {
+
+        var CLIENT_ID = '1077685420865-3ja0alihhchqinibd4p5ft9lpr9svp9j.apps.googleusercontent.com';
+        //var SCOPES = "https://www.googleapis.com/auth/drive.file";
+
+        $scope.realtimeUtils = new utils.RealtimeUtils({clientId: CLIENT_ID});
+
+        authorize();
+
+        function authorize() {
+            console.log("0");
+            $scope.realtimeUtils.authorize(function (response) {
+                console.log("1");
+                if (response.error) {
+                    console.log("2");
+                    var button = document.getElementById('auth_button');
+                    button.classList.add('visible');
+                    button.addEventListener('click', function () {
+                        $scope.realtimeUtils.authorize(function () {
+                            $scope.start();
+                        }, true);
+                    });
+                } else {
+                    console.log("3");
+                    $scope.start();
+                }
+            }, false);
+        }
+    };
+
+    $scope.start = function () {
+        var id = $scope.realtimeUtils.getParam('id');
+        if (id) {
+            console.log("We got a valid fileID: " + id);
+            $scope.realtimeUtils.load(id.replace('/', ''), $scope.fileLoaded, $scope.fileInitialize);
+        } else {
+            $scope.realtimeUtils.createRealtimeFile('New Quickstart File', function (createResponse) {
+                window.history.pushState(null, null, '?id=' + createResponse.id);
+                $scope.realtimeUtils.load(createResponse.id, $scope.fileLoaded, $scope.fileInitialize);
+            });
+        }
+    };
+
+
+    $scope.loadDriveAPI = function () {
+        gapi.load("auth:client,drive-realtime,drive-share", function () {
+            console.log("Google Drive API loaded!");
+            $scope.handleAuth();
+        });
+    };
+
+    $scope.fileInitialize = function (model) {
+        console.log("file initialize");
+        $scope.crdtMap = model.createMap({});
+        model.getRoot().set('demo_map', $scope.crdtMap);
+        $scope.hookUpEventListener();
+    };
+
+    $scope.fileLoaded = function (doc) {
+        console.log("file loaded");
+        $scope.crdtMap = doc.getModel().getRoot().get('demo_map');
+        $scope.hookUpEventListener();
+        $scope.$apply($scope.updateRowsModel($scope.crdtMap.items()));
+    };
+
+    $scope.hookUpEventListener = function () {
+        $scope.crdtMap.addEventListener(gapi.drive.realtime.EventType.VALUE_CHANGED, function (event) {
+
+            if (event.isLocal == true) {
+                console.log("local change");
+            } else {
+                console.log("Map values changed:");
+                console.log($scope.crdtMap.items());
+                $scope.$apply($scope.updateRowsModel($scope.crdtMap.items()));
+            }
+        });
+    };
+
+    $scope.updateRowsModel = function (items) {
+        var row, col, value, finalValue, register;
+        items.forEach(function (element) {
+            finalValue = '';
+            console.log(element);
+            row = element[0].split('-')[0];
+            col = element[0].split('-')[1];
+
+            register = CRDT.newRegisterFromJSON(element[0], element[1]);
+            value = register.getValue();
+            console.log("row[" + row + "] col[" + col + "] = " + value);
+
+            if (value.length == 1) {
+                finalValue = value[0];
+            } else {
+                value.forEach(function (val) {
+                    finalValue = finalValue + val + '|';
+                });
+            }
+
+            $scope.rows[row][col].value = finalValue;
+        });
+
+    };
 
     /**
      * When a cell is clicked this method sets up the "editing mode"
@@ -33,27 +145,40 @@ app.controller('interactionController', function ($scope) {
         // get the cell
         var $cell = $("#cell" + row + "-" + col);
 
-        var callback_j2h3l4kjhdlaks = function (event) {
+        var callback_j2h3l4kjhdlaks = function () {
             // get the value of the input
             var value = $cell[0].innerHTML;
 
-            var cell = {};
-            cell.row = row;
-            cell.col = col;
-            cell.value = value;
+            var id = row + '-' + col;
 
-            $scope.saveCellContent(row, col, value);
+            var register;
+            if (typeof $scope.crdtMap.id == 'undefined') {
+                register = $scope.crdtMap.id;
+            } else {
+                register = CRDT.newRegister(id);
+            }
+            /** @register MVRegister */
+            register.setValue($scope.replicaIdentifier, value);
+
+            $scope.replicate(id, register);
         };
 
         $cell.blur(callback_j2h3l4kjhdlaks);
-    }
+    };
+
+    $scope.replicate = function (id, register) {
+        // set the value in the collaborative map
+        console.log("We should replicate [ " + id + " => " + register.toJSON() + "]");
+        $scope.crdtMap.set(id, register.toJSON());
+        console.log($scope.crdtMap);
+    };
 
     /**
      * Simple function to request the backend to print the peers list.
      */
     $scope.printPeersList = function () {
 
-    }
+    };
 
 
     /**
@@ -80,37 +205,7 @@ app.controller('interactionController', function ($scope) {
             ]
         }
 
-    }
-
-    $scope.setupGoogleAPI = function () {
-
-        $.getScript("https://apis.google.com/js/api.js", function () {
-
-            // Load the Realtime API, no auth needed.
-            gapi.load('auth:client,drive-realtime,drive-share', start);
-
-            function start() {
-                var doc = gapi.drive.realtime.newInMemoryDocument();
-                var model = doc.getModel();
-                var collaborativeString = model.createString();
-                collaborativeString.setText('Welcome to the Quickstart App!');
-                model.getRoot().set('demo_string', collaborativeString);
-                wireTextBoxes(collaborativeString);
-                document.getElementById('json_button').addEventListener('click', function () {
-                    document.getElementById('json_textarea').value = model.toJson();
-                });
-            }
-
-            // Connects the text boxes to the collaborative string.
-            function wireTextBoxes(collaborativeString) {
-                var textArea1 = document.getElementById('text_area_1');
-                var textArea2 = document.getElementById('text_area_2');
-                gapi.drive.realtime.databinding.bindString(collaborativeString, textArea1);
-                gapi.drive.realtime.databinding.bindString(collaborativeString, textArea2);
-            }
-
-        });
-    }
+    };
 
     /**
      * Function to determine the cell styling based on the position.
@@ -124,7 +219,7 @@ app.controller('interactionController', function ($scope) {
         } else {
             return "tg-afp9";
         }
-    }
+    };
 
     /**
      * Update the cell value on the controller, and trigger a UI update.
@@ -152,35 +247,7 @@ app.controller('interactionController', function ($scope) {
 
         });
         $scope.$apply();
-    }
-
-    /**
-     * Update the online user counter and trigger a UI update.
-     * @param message
-     */
-    $scope.updateOnlineUserCount = function (message) {
-        console.log("We received a new online user count");
-        console.log(message);
-        $scope.onlineUserCount = message.content;
-        $scope.onlineUserCountString = $scope.onlineUserCount + " online users";
-        $scope.$apply();
-    }
-
-    /**
-     * Start the process to save a cell value in the backend.
-     * @param row
-     * @param column
-     * @param value
-     */
-    $scope.saveCellContent = function (row, column, value) {
-        var fem = FrontEndMessaging.getInstance();
-        var cell = {};
-        cell.row = row;
-        cell.col = column;
-        cell.value = value;
-        var msg = MessagePassing.MessageToBack(MessagePassing.MessageTypes.NEW_CELL_VALUE, cell);
-        fem.sendMessage(msg);
-    }
+    };
 
     /**
      * Run a test editing random cells with random values.
@@ -208,7 +275,7 @@ app.controller('interactionController', function ($scope) {
                 cell.value = value;
 
                 $scope.updateCell([cell]);
-                $scope.saveCellContent(randomRow, randomCol, value);
+                //$scope.saveCellContent(randomRow, randomCol, value);
             } else {
                 window.clearInterval($scope.interval);
             }
@@ -216,8 +283,7 @@ app.controller('interactionController', function ($scope) {
         };
 
         $scope.interval = setInterval(intervalFunction, test.frequency);
-    }
+    };
 
-    console.log("Hello!");
     $scope.setupSpreadsheet();
-});
+}]);
